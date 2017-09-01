@@ -4,21 +4,24 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
+#include <stdlib.h>
 
-static void benchmark_sleeps(void)
+static pthread_cond_t cv;
+static pthread_mutex_t mutex;
+
+static void *waiter_thread(void *opaque)
 {
     struct timeval tv_start;
     struct timeval tv_end;
     struct timeval tv;
-    struct timespec ts_sleep;
     uint64_t loops = 0;
 
     assert(!gettimeofday(&tv_start, NULL));
     tv_end = tv_start;
     tv_end.tv_sec += 1;
 
-    ts_sleep.tv_nsec = 1;
-    ts_sleep.tv_sec = 0;
+    pthread_mutex_lock(&mutex);
 
     while(1) {
         assert(!gettimeofday(&tv, NULL));
@@ -26,15 +29,38 @@ static void benchmark_sleeps(void)
             break;
 
         loops++;
-        nanosleep(&ts_sleep, NULL);
+        pthread_cond_wait(&cv, &mutex);
     }
 
+    pthread_mutex_unlock(&mutex);
+
     printf("Number of sleeps: %ld\n", loops);
+    exit(0);
+    return NULL;
+}
+
+static void *notifier_thread(void *opaque)
+{
+    while (1) {
+        pthread_mutex_lock(&mutex);
+        pthread_cond_signal(&cv);
+        pthread_mutex_unlock(&mutex);
+    }
+
+    return NULL;
 }
 
 int main(int argc, char **argv)
 {
-    benchmark_sleeps();
+    pthread_t threads[2];
+    int i;
+
+    pthread_create(&threads[0], NULL, notifier_thread, NULL);
+    pthread_create(&threads[1], NULL, waiter_thread, NULL);
+
+    for (i=0; i<(sizeof(threads) / sizeof(threads[0])); i++) {
+        pthread_join(threads[i], NULL);
+    }
 
     return 0;
 }
