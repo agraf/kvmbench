@@ -7,9 +7,19 @@ if [ ! -x /usr/bin/john ]; then
     exit 1
 fi
 
+function expand_range() {
+    if echo "$1" | grep -q -; then
+        for i in $(seq $(echo "$1" | cut -d - -f 1) $(echo "$1" | cut -d - -f 2)); do
+            echo -n "$i "
+        done
+    else
+        echo "$1"
+    fi
+}
+
 # Find HT companion
-CPU0=$(sed 's/,/ /g' /sys/devices/system/cpu/cpu0/topology/thread_siblings_list)
-CPU2=$(sed 's/,/ /g' /sys/devices/system/cpu/cpu2/topology/thread_siblings_list)
+CPU0=$(expand_range $(sed 's/,/ /g' /sys/devices/system/cpu/cpu0/topology/thread_siblings_list))
+CPU2=$(expand_range $(sed 's/,/ /g' /sys/devices/system/cpu/cpu2/topology/thread_siblings_list))
 
 echo "Running on CPUs 0 and 2:"
 for i in 0 2; do
