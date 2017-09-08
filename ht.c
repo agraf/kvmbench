@@ -13,6 +13,7 @@
 
 volatile uint32_t running = 0;
 int opt_pinned = 1;
+int opt_optimal = 1;
 
 volatile struct {
     uint64_t result;
@@ -100,8 +101,11 @@ int main(int argc, char **argv)
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-P")) {
             opt_pinned = 0;
+        } else if (!strcmp(argv[i], "-c")) {
+            opt_optimal = 0;
         } else {
             printf("Syntax: %s\n\n", argv[0]);
+            printf("  -c    Pin the threads to collide\n");
             printf("  -P    Don't pin the threads\n");
             printf("\n");
             exit(0);
@@ -111,8 +115,6 @@ int main(int argc, char **argv)
     results = malloc(num_cores * sizeof(*results));
     memset((void*)results, 0, num_cores * sizeof(*results));
     memset(thread_spawned, 0, num_cores);
-
-#if 1
 
     for (i = 0; i < num_cores; i++) {
         char path[512];
@@ -147,7 +149,9 @@ int main(int argc, char **argv)
                 if (cur_siblings & (1U << j)) {
                     int cpu = j + offset;
                     spawn_thread(&thread[cpu], &thread_spawned[cpu], is_div, cpu);
-                    is_div = (is_div + 1) & 1;
+                    if (opt_optimal) {
+                        is_div = (is_div + 1) & 1;
+                    }
                 }
             }
 
@@ -158,18 +162,11 @@ int main(int argc, char **argv)
             tsp -= 9;
             offset += 32;
         }
-    }
-#else
-    for (i = 0; i < num_cores; i++) {
-        int thread0 = i;
-        int thread1 = i + 1;
 
-        if (thread_spawned[i]) continue;
-
-        spawn_thread(&thread[thread0], &thread_spawned[thread0], 1, thread0);
-        spawn_thread(&thread[thread1], &thread_spawned[thread1], 0, thread1);
+        if (!opt_optimal) {
+            is_div = (is_div + 1) & 1;
+        }
     }
-#endif
 
     if (opt_pinned) {
         printf("Running MUL test on CPUs ");
