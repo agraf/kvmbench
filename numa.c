@@ -14,6 +14,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <numa.h>
 
 #define MB (1024 * 1024)
 
@@ -70,6 +71,8 @@ int main(int argc, char **argv)
     int pipefd[2];
     int i;
     uint64_t all_bytes = 0;
+    int numa_node = 0;
+    int numa_max = numa_max_node();
 
     /*
      * We create reader and writer processes. Both are connected via pipes.
@@ -85,17 +88,32 @@ int main(int argc, char **argv)
 
     for (i = 0; i < NR_CHILDREN; i++) {
         int cpid;
+        int new_pair = ((i & 1) == CHILD_READER);
 
-        if (!(i & 1)) {
+        if (new_pair) {
             if (pipe(pipefd)) {
                 printf("Error while creating pipe: %s\n", strerror(errno));
                 exit_all(childpid);
             }
+
+            /*
+             * Move to the next NUMA node, so we pin reader and writer to
+             * the same node
+             */
+            numa_node++;
+            numa_node %= (numa_max + 1);
+
+            printf("Using NUMA node %d (size=%lx)\n", numa_node, numa_node_size(numa_node, NULL));
         }
 
         cpid = fork();
         if (!cpid) {
-            /* We're a child now, figure out what we should do */
+            /*
+             * We're a child now, figure out what we should do, but
+             * first pin us to the numa node.
+             */
+
+            numa_set_preferred(numa_node);
 
             if ((i & 1) == CHILD_READER) {
                 /* Reader */
@@ -107,7 +125,7 @@ int main(int argc, char **argv)
                 child_writer(pipefd[CHILD_WRITER]);
             }
         } else {
-            /* Parent, clean up and remember child pid */
+            /* Parent, remember child pid */
             childpid[i] = cpid;
         }
     }
