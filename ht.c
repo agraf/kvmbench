@@ -30,7 +30,7 @@ static void *thread_div(void *opaque)
 
     while (1) {
         for (i = 0; i < 16; i++) {
-            d = ((d + 12345LL) / ((int64_t)idx + 1));
+            d = d / (int64_t)idx;
             asm("" : : "r"(d));
         }
         loops += 16;
@@ -47,7 +47,6 @@ static void *thread_mul(void *opaque)
     uint64_t idx = (unsigned long)opaque;
     int64_t d = idx;
     uint64_t loops = 0;
-    volatile int64_t buf;
 
     while (!running);
 
@@ -56,8 +55,7 @@ static void *thread_mul(void *opaque)
 
         for (i = 0; i < 16; i++) {
             d = d * (int64_t)idx;
-            asm("" : : "x"(d), "x"(buf));
-            buf = d;
+            asm("" : : "r"(d));
         }
         loops += 16;
         if (!(loops & 0xffff)) {
