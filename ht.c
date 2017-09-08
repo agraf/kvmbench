@@ -15,21 +15,25 @@ int opt_pinned = 1;
 
 volatile struct {
     uint64_t result;
+    int is_alu;
 } *results;
 
 static void *thread_alu(void *opaque)
 {
     uint64_t idx = (unsigned long)opaque;
-    volatile uint64_t d = idx;
+    uint64_t d = idx;
     uint64_t loops = 0;
 
     while (!running);
 
     while (1) {
         d = d * 11;
+        asm("" : : "r"(d));
         loops++;
-        results[idx].result = loops;
-    } 
+        if (!(loops & 0xffff)) {
+            results[idx].result = loops;
+        }
+    }
 
     return (void*)d;
 }
@@ -37,16 +41,23 @@ static void *thread_alu(void *opaque)
 static void *thread_fpu(void *opaque)
 {
     uint64_t idx = (unsigned long)opaque;
-    volatile double f = (double)idx;
+    double f = (double)idx;
     uint64_t loops = 0;
 
     while (!running);
 
     while (1) {
-        f = f * 1.01;
-        loops++;
-        results[idx].result = loops;
-    } 
+        int i;
+
+        for (i = 0; i < 16; i++) {
+            f = f * 1.01;
+            asm("" : : "x"(f));
+        }
+        loops += 16;
+        if (!(loops & 0xffff)) {
+            results[idx].result = loops;
+        }
+    }
 
     return (void*)(unsigned long)f;
 }
@@ -62,6 +73,8 @@ int pin_thread(pthread_t t, int core_id) {
 
 static void spawn_thread(pthread_t *pt, char *spawned, int is_alu, uintptr_t idx)
 {
+    results[idx].is_alu = is_alu;
+
     pthread_create(pt, NULL, is_alu ? thread_alu : thread_fpu, (void*)idx);
     if (opt_pinned) {
         pin_thread(*pt, idx);
@@ -154,12 +167,33 @@ int main(int argc, char **argv)
     }
 #endif
 
+    if (opt_pinned) {
+        printf("Running FPU test on CPUs ");
+        for (i = 0; i < num_cores; i++) {
+            if (!results[i].is_alu) {
+                printf("%d ", i);
+            }
+        }
+        printf("\n");
+
+        printf("Running ALU test on CPUs ");
+        for (i = 0; i < num_cores; i++) {
+            if (results[i].is_alu) {
+                printf("%d ", i);
+            }
+        }
+        printf("\n");
+    } else {
+        printf("Running ALU and FPU tests without pinning ...\n");
+    }
+
     running = 1;
     sleep(5);
 
     for (i = 0; i < num_cores; i++) {
         result += results[i].result;
     }
+
     printf("Total MOps: %ld\n", result / 1000000 / 5);
 
     return 0;
