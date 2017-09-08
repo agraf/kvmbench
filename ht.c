@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+uint32_t running = 0;
+
 volatile struct {
     uint64_t result;
 } *results;
@@ -16,6 +18,8 @@ static void *thread_alu(void *opaque)
     uint64_t idx = (unsigned long)opaque;
     volatile uint64_t d = idx;
     uint64_t loops = 0;
+
+    while (!running);
 
     while (1) {
         d = d * 11;
@@ -31,6 +35,8 @@ static void *thread_fpu(void *opaque)
     uint64_t idx = (unsigned long)opaque;
     volatile double f = (double)idx;
     uint64_t loops = 0;
+
+    while (!running);
 
     while (1) {
         f = f * 1.01;
@@ -86,6 +92,7 @@ int main(int argc, char **argv)
         spawn_thread(&thread[thread1], &thread_spawned[thread1], 0, thread1);
     }
 
+    running = 1;
     sleep(5);
 #endif
 
