@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-uint32_t running = 0;
+volatile uint32_t running = 0;
 
 volatile struct {
     uint64_t result;
