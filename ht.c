@@ -9,27 +9,31 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <math.h>
 
 volatile uint32_t running = 0;
 int opt_pinned = 1;
 
 volatile struct {
     uint64_t result;
-    int is_alu;
+    int is_div;
 } *results;
 
-static void *thread_alu(void *opaque)
+static void *thread_div(void *opaque)
 {
     uint64_t idx = (unsigned long)opaque;
-    uint64_t d = idx;
+    int64_t d = idx;
     uint64_t loops = 0;
+    int i;
 
     while (!running);
 
     while (1) {
-        d = d * 11;
-        asm("" : : "r"(d));
-        loops++;
+        for (i = 0; i < 16; i++) {
+            d = ((d + 12345LL) / ((int64_t)idx + 1));
+            asm("" : : "r"(d));
+        }
+        loops += 16;
         if (!(loops & 0xffff)) {
             results[idx].result = loops;
         }
@@ -38,11 +42,12 @@ static void *thread_alu(void *opaque)
     return (void*)d;
 }
 
-static void *thread_fpu(void *opaque)
+static void *thread_mul(void *opaque)
 {
     uint64_t idx = (unsigned long)opaque;
-    double f = (double)idx;
+    int64_t d = idx;
     uint64_t loops = 0;
+    volatile int64_t buf;
 
     while (!running);
 
@@ -50,8 +55,9 @@ static void *thread_fpu(void *opaque)
         int i;
 
         for (i = 0; i < 16; i++) {
-            f = f * 1.01;
-            asm("" : : "x"(f));
+            d = d * (int64_t)idx;
+            asm("" : : "x"(d), "x"(buf));
+            buf = d;
         }
         loops += 16;
         if (!(loops & 0xffff)) {
@@ -59,7 +65,7 @@ static void *thread_fpu(void *opaque)
         }
     }
 
-    return (void*)(unsigned long)f;
+    return (void*)(unsigned long)d;
 }
 
 int pin_thread(pthread_t t, int core_id) {
@@ -71,11 +77,11 @@ int pin_thread(pthread_t t, int core_id) {
     return pthread_setaffinity_np(t, sizeof(cpu_set_t), &cpuset);
 }
 
-static void spawn_thread(pthread_t *pt, char *spawned, int is_alu, uintptr_t idx)
+static void spawn_thread(pthread_t *pt, char *spawned, int is_div, uintptr_t idx)
 {
-    results[idx].is_alu = is_alu;
+    results[idx].is_div = is_div;
 
-    pthread_create(pt, NULL, is_alu ? thread_alu : thread_fpu, (void*)idx);
+    pthread_create(pt, NULL, is_div ? thread_div : thread_mul, (void*)idx);
     if (opt_pinned) {
         pin_thread(*pt, idx);
     }
@@ -91,7 +97,7 @@ int main(int argc, char **argv)
     uint64_t result = 0;
     char thread_siblings[1024];
     char *tsp;
-    int is_alu = 0;
+    int is_div = 0;
 
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-P")) {
@@ -142,8 +148,8 @@ int main(int argc, char **argv)
             for (j = 0; j < 32; j++) {
                 if (cur_siblings & (1U << j)) {
                     int cpu = j + offset;
-                    spawn_thread(&thread[cpu], &thread_spawned[cpu], is_alu, cpu);
-                    is_alu = (is_alu + 1) & 1;
+                    spawn_thread(&thread[cpu], &thread_spawned[cpu], is_div, cpu);
+                    is_div = (is_div + 1) & 1;
                 }
             }
 
@@ -168,33 +174,43 @@ int main(int argc, char **argv)
 #endif
 
     if (opt_pinned) {
-        printf("Running FPU test on CPUs ");
+        printf("Running MUL test on CPUs ");
         for (i = 0; i < num_cores; i++) {
-            if (!results[i].is_alu) {
+            if (!results[i].is_div) {
                 printf("%d ", i);
             }
         }
         printf("\n");
 
-        printf("Running ALU test on CPUs ");
+        printf("Running DIV test on CPUs ");
         for (i = 0; i < num_cores; i++) {
-            if (results[i].is_alu) {
+            if (results[i].is_div) {
                 printf("%d ", i);
             }
         }
         printf("\n");
     } else {
-        printf("Running ALU and FPU tests without pinning ...\n");
+        printf("Running DIV and MUL tests without pinning ...\n");
     }
 
     running = 1;
     sleep(5);
 
+    result = 0;
     for (i = 0; i < num_cores; i++) {
-        result += results[i].result;
+        if (results[i].is_div) {
+            result += results[i].result;
+        }
     }
+    printf("Total MDivs: %ld\n", result / 1000000 / 5);
 
-    printf("Total MOps: %ld\n", result / 1000000 / 5);
+    result = 0;
+    for (i = 0; i < num_cores; i++) {
+        if (!results[i].is_div) {
+            result += results[i].result;
+        }
+    }
+    printf("Total MMuls: %ld\n", result / 1000000 / 5);
 
     return 0;
 }
