@@ -28,7 +28,8 @@ enum child_type {
 
 struct {
     uint64_t bytes;
-    uint8_t padding[64 - 8];
+    uint32_t node;
+    uint8_t padding[64 - 8 - 4];
 } *results;
 
 void exit_all(int *pids)
@@ -48,6 +49,7 @@ static void child_reader(int fd, volatile uint64_t *result)
     char *buf = malloc(size);
     uint64_t bytes = 0;
 
+    memset(buf, '\0', size);
     while (1) {
         bytes += read(fd, buf, size);
         *result = bytes;
@@ -149,6 +151,8 @@ int main(int argc, char **argv)
                 numa_set_preferred(numa_node);
                 numa_run_on_node(numa_node);
             }
+
+            results[i].node = numa_node_of_cpu(sched_getcpu());
 
             if ((i & 1) == CHILD_READER) {
                 /* Reader */
