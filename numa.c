@@ -73,6 +73,26 @@ int main(int argc, char **argv)
     uint64_t all_bytes = 0;
     int numa_node = 0;
     int numa_max = numa_max_node() + 1;
+    int opt_aligned = 1;
+    int opt_numactl = 1;
+    int opt_rotate = 1;
+
+    for (i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-u")) {
+            opt_aligned = 0;
+        } else if (!strcmp(argv[i], "-N")) {
+            opt_numactl = 0;
+        } else if (!strcmp(argv[i], "-0")) {
+            opt_rotate = 0;
+        } else {
+            printf("Syntax: %s\n\n", argv[0]);
+            printf("  -u    Misalign NUMA nodes for reader/writer\n");
+            printf("  -N    Disable NUMA awareness\n");
+            printf("  -0    Always use NUMA node 0\n");
+            printf("\n");
+            exit(0);
+        }
+    }
 
     /*
      * We create reader and writer processes. Both are connected via pipes.
@@ -87,6 +107,14 @@ int main(int argc, char **argv)
                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
     printf("Benchmarking message passing on %d NUMA nodes ...\n", numa_max);
+    if (opt_numactl) {
+        printf("  NUMA aware:        yes\n");
+        printf("  NUMA aligned:      %s\n", opt_aligned ? "yes" : "no");
+        printf("  NUMA nodes used:   0-%d\n", opt_rotate ? numa_max-1 : 0);
+    } else {
+        printf("  NUMA aware:        no\n");
+    }
+    printf("\n");
 
     for (i = 0; i < NR_CHILDREN; i++) {
         int cpid;
@@ -106,6 +134,10 @@ int main(int argc, char **argv)
             numa_node %= numa_max;
         }
 
+        if (!opt_rotate) {
+            numa_node = 0;
+        }
+
         cpid = fork();
         if (!cpid) {
             /*
@@ -113,8 +145,10 @@ int main(int argc, char **argv)
              * first pin us to the numa node.
              */
 
-            numa_set_preferred(numa_node);
-            numa_run_on_node(numa_node);
+            if (opt_numactl) {
+                numa_set_preferred(numa_node);
+                numa_run_on_node(numa_node);
+            }
 
             if ((i & 1) == CHILD_READER) {
                 /* Reader */
@@ -128,6 +162,11 @@ int main(int argc, char **argv)
         } else {
             /* Parent, remember child pid */
             childpid[i] = cpid;
+
+            if (!opt_aligned) {
+                numa_node++;
+                numa_node %= numa_max;
+            }
         }
     }
 
