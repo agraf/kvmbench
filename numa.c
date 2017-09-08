@@ -72,7 +72,7 @@ int main(int argc, char **argv)
     int i;
     uint64_t all_bytes = 0;
     int numa_node = 0;
-    int numa_max = numa_max_node();
+    int numa_max = numa_max_node() + 1;
 
     /*
      * We create reader and writer processes. Both are connected via pipes.
@@ -85,6 +85,8 @@ int main(int argc, char **argv)
 
     results = mmap(NULL, sizeof(*results) * NR_CHILDREN, PROT_READ | PROT_WRITE, 
                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    printf("Benchmarking message passing on %d NUMA nodes ...\n", numa_max);
 
     for (i = 0; i < NR_CHILDREN; i++) {
         int cpid;
@@ -101,9 +103,7 @@ int main(int argc, char **argv)
              * the same node
              */
             numa_node++;
-            numa_node %= (numa_max + 1);
-
-            printf("Using NUMA node %d (size=%lx)\n", numa_node, numa_node_size(numa_node, NULL));
+            numa_node %= numa_max;
         }
 
         cpid = fork();
@@ -114,6 +114,7 @@ int main(int argc, char **argv)
              */
 
             numa_set_preferred(numa_node);
+            numa_run_on_node(numa_node);
 
             if ((i & 1) == CHILD_READER) {
                 /* Reader */
