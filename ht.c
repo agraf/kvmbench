@@ -10,45 +10,40 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <math.h>
+#include <immintrin.h>
 
 volatile uint32_t running = 0;
 int opt_pinned = 1;
 int opt_optimal = 1;
-int opt_only_add = 0;
+int opt_only_store = 0;
 int opt_only_mul = 0;
 
 volatile struct {
     uint64_t result;
-    int is_add;
+    int is_store;
 } *results;
 
-static void *thread_add(void *opaque)
+static void *thread_store(void *opaque)
 {
     uint64_t idx = (unsigned long)opaque;
-    int64_t a = idx;
-    int64_t b = idx + 1;
-    int64_t c = idx + 2;
     int64_t d = idx + 3;
-    int64_t e = idx + 4;
-    int64_t f = idx + 5;
-    int64_t g = idx + 6;
-    int64_t h = idx + 7;
     uint64_t loops = 0;
     int i;
+    char ref[] = { d, d, d, d,
+                   d, d, d, d,
+                   d, d, d, d,
+                   d, d, d, d,
+                   d, d, d, d,
+                   d, d, d, d,
+                   d, d, d, d,
+                   d, d, d, d };
 
     while (!running);
 
     while (1) {
         for (i = 0; i < 16; i++) {
-            a += idx;
-            b += idx;
-            c += idx;
-            d += idx;
-            e += idx;
-            f += idx;
-            g += idx;
-            h += idx;
-            asm("" : : "r"(a), "r"(b), "r"(c), "r"(d), "r"(e), "r"(f), "r"(g), "r"(h));
+            ref[i] = d;
+            asm("" : : "m"(ref));
         }
         loops += 16;
         if (!(loops & 0xffff)) {
@@ -92,11 +87,11 @@ int pin_thread(pthread_t t, int core_id) {
     return pthread_setaffinity_np(t, sizeof(cpu_set_t), &cpuset);
 }
 
-static void spawn_thread(pthread_t *pt, char *spawned, int is_add, uintptr_t idx)
+static void spawn_thread(pthread_t *pt, char *spawned, int is_store, uintptr_t idx)
 {
-    results[idx].is_add = is_add;
+    results[idx].is_store = is_store;
 
-    pthread_create(pt, NULL, is_add ? thread_add : thread_mul, (void*)idx);
+    pthread_create(pt, NULL, is_store ? thread_store : thread_mul, (void*)idx);
     if (opt_pinned) {
         pin_thread(*pt, idx);
     }
@@ -112,16 +107,16 @@ int main(int argc, char **argv)
     uint64_t result = 0;
     char thread_siblings[1024];
     char *tsp;
-    int is_add = 0;
+    int is_store = 0;
 
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-P")) {
             opt_pinned = 0;
         } else if (!strcmp(argv[i], "-c")) {
             opt_optimal = 0;
-        } else if (!strcmp(argv[i], "-d")) {
-            opt_only_add = 1;
-            is_add = 1;
+        } else if (!strcmp(argv[i], "-s")) {
+            opt_only_store = 1;
+            is_store = 1;
             opt_optimal = 0;
         } else if (!strcmp(argv[i], "-m")) {
             opt_only_mul = 1;
@@ -130,6 +125,8 @@ int main(int argc, char **argv)
             printf("Syntax: %s\n\n", argv[0]);
             printf("  -c    Pin the threads to collide\n");
             printf("  -P    Don't pin the threads\n");
+            printf("  -s    Run store test on all threads\n");
+            printf("  -m    Run mul test on all threads\n");
             printf("\n");
             exit(0);
         }
@@ -178,9 +175,9 @@ int main(int argc, char **argv)
             for (j = 0; j < 32; j++) {
                 if (cur_siblings & (1U << j)) {
                     int cpu = j + offset;
-                    spawn_thread(&thread[cpu], &thread_spawned[cpu], is_add, cpu);
+                    spawn_thread(&thread[cpu], &thread_spawned[cpu], is_store, cpu);
                     if (opt_optimal) {
-                        is_add = (is_add + 1) & 1;
+                        is_store = (is_store + 1) & 1;
                     }
                 }
             }
@@ -193,33 +190,33 @@ int main(int argc, char **argv)
             offset += 32;
         }
 
-        if (opt_only_add) {
-            is_add = 1;
+        if (opt_only_store) {
+            is_store = 1;
         } else if (opt_only_mul) {
-            is_add = 0;
+            is_store = 0;
         } else if (!opt_optimal) {
-            is_add = (is_add + 1) & 1;
+            is_store = (is_store + 1) & 1;
         }
     }
 
     if (opt_pinned) {
-        printf("Running MUL test on CPUs ");
+        printf("Running  MUL  test on CPUs ");
         for (i = 0; i < num_cores; i++) {
-            if (!results[i].is_add) {
+            if (!results[i].is_store) {
                 printf("%d ", i);
             }
         }
         printf("\n");
 
-        printf("Running ADD test on CPUs ");
+        printf("Running STORE test on CPUs ");
         for (i = 0; i < num_cores; i++) {
-            if (results[i].is_add) {
+            if (results[i].is_store) {
                 printf("%d ", i);
             }
         }
         printf("\n");
     } else {
-        printf("Running ADD and MUL tests without pinning ...\n");
+        printf("Running STORE and MUL tests without pinning ...\n");
     }
 
     running = 1;
@@ -227,7 +224,7 @@ int main(int argc, char **argv)
 
     result = 0;
     for (i = 0; i < num_cores; i++) {
-        if (!results[i].is_add) {
+        if (!results[i].is_store) {
             result += results[i].result;
         }
     }
@@ -235,11 +232,11 @@ int main(int argc, char **argv)
 
     result = 0;
     for (i = 0; i < num_cores; i++) {
-        if (results[i].is_add) {
+        if (results[i].is_store) {
             result += results[i].result;
         }
     }
-    printf("Total MAdds: %ld\n", result / 1000000 / 5);
+    printf("Total MStore: %ld\n", result / 1000000 / 5);
 
     return 0;
 }
