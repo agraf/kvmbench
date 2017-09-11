@@ -187,6 +187,9 @@ int main(int argc, char **argv)
 
             tsp -= 9;
             offset += 32;
+            if ((uintptr_t)tsp < (uintptr_t)thread_siblings) {
+                tsp = thread_siblings;
+            }
         }
 
         if (opt_only_store) {
