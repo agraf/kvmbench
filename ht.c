@@ -14,16 +14,25 @@
 volatile uint32_t running = 0;
 int opt_pinned = 1;
 int opt_optimal = 1;
+int opt_only_add = 0;
+int opt_only_mul = 0;
 
 volatile struct {
     uint64_t result;
-    int is_div;
+    int is_add;
 } *results;
 
-static void *thread_div(void *opaque)
+static void *thread_add(void *opaque)
 {
     uint64_t idx = (unsigned long)opaque;
-    int64_t d = idx;
+    int64_t a = idx;
+    int64_t b = idx + 1;
+    int64_t c = idx + 2;
+    int64_t d = idx + 3;
+    int64_t e = idx + 4;
+    int64_t f = idx + 5;
+    int64_t g = idx + 6;
+    int64_t h = idx + 7;
     uint64_t loops = 0;
     int i;
 
@@ -31,8 +40,15 @@ static void *thread_div(void *opaque)
 
     while (1) {
         for (i = 0; i < 16; i++) {
-            d = d / (int64_t)idx;
-            asm("" : : "r"(d));
+            a += idx;
+            b += idx;
+            c += idx;
+            d += idx;
+            e += idx;
+            f += idx;
+            g += idx;
+            h += idx;
+            asm("" : : "r"(a), "r"(b), "r"(c), "r"(d), "r"(e), "r"(f), "r"(g), "r"(h));
         }
         loops += 16;
         if (!(loops & 0xffff)) {
@@ -76,11 +92,11 @@ int pin_thread(pthread_t t, int core_id) {
     return pthread_setaffinity_np(t, sizeof(cpu_set_t), &cpuset);
 }
 
-static void spawn_thread(pthread_t *pt, char *spawned, int is_div, uintptr_t idx)
+static void spawn_thread(pthread_t *pt, char *spawned, int is_add, uintptr_t idx)
 {
-    results[idx].is_div = is_div;
+    results[idx].is_add = is_add;
 
-    pthread_create(pt, NULL, is_div ? thread_div : thread_mul, (void*)idx);
+    pthread_create(pt, NULL, is_add ? thread_add : thread_mul, (void*)idx);
     if (opt_pinned) {
         pin_thread(*pt, idx);
     }
@@ -96,12 +112,19 @@ int main(int argc, char **argv)
     uint64_t result = 0;
     char thread_siblings[1024];
     char *tsp;
-    int is_div = 0;
+    int is_add = 0;
 
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-P")) {
             opt_pinned = 0;
         } else if (!strcmp(argv[i], "-c")) {
+            opt_optimal = 0;
+        } else if (!strcmp(argv[i], "-d")) {
+            opt_only_add = 1;
+            is_add = 1;
+            opt_optimal = 0;
+        } else if (!strcmp(argv[i], "-m")) {
+            opt_only_mul = 1;
             opt_optimal = 0;
         } else {
             printf("Syntax: %s\n\n", argv[0]);
@@ -135,6 +158,13 @@ int main(int argc, char **argv)
         /* Just hope we read everything */
         close(fd);
 
+        if (strlen(thread_siblings) < 9) {
+            uint32_t cur_siblings;
+
+            sscanf(thread_siblings, "%x", &cur_siblings);
+            sprintf(thread_siblings, "%08x\n", cur_siblings);
+        }
+
         tsp = thread_siblings + strlen(thread_siblings) - 9;
         while (1) {
             uint32_t cur_siblings;
@@ -148,9 +178,9 @@ int main(int argc, char **argv)
             for (j = 0; j < 32; j++) {
                 if (cur_siblings & (1U << j)) {
                     int cpu = j + offset;
-                    spawn_thread(&thread[cpu], &thread_spawned[cpu], is_div, cpu);
+                    spawn_thread(&thread[cpu], &thread_spawned[cpu], is_add, cpu);
                     if (opt_optimal) {
-                        is_div = (is_div + 1) & 1;
+                        is_add = (is_add + 1) & 1;
                     }
                 }
             }
@@ -163,29 +193,33 @@ int main(int argc, char **argv)
             offset += 32;
         }
 
-        if (!opt_optimal) {
-            is_div = (is_div + 1) & 1;
+        if (opt_only_add) {
+            is_add = 1;
+        } else if (opt_only_mul) {
+            is_add = 0;
+        } else if (!opt_optimal) {
+            is_add = (is_add + 1) & 1;
         }
     }
 
     if (opt_pinned) {
         printf("Running MUL test on CPUs ");
         for (i = 0; i < num_cores; i++) {
-            if (!results[i].is_div) {
+            if (!results[i].is_add) {
                 printf("%d ", i);
             }
         }
         printf("\n");
 
-        printf("Running DIV test on CPUs ");
+        printf("Running ADD test on CPUs ");
         for (i = 0; i < num_cores; i++) {
-            if (results[i].is_div) {
+            if (results[i].is_add) {
                 printf("%d ", i);
             }
         }
         printf("\n");
     } else {
-        printf("Running DIV and MUL tests without pinning ...\n");
+        printf("Running ADD and MUL tests without pinning ...\n");
     }
 
     running = 1;
@@ -193,19 +227,19 @@ int main(int argc, char **argv)
 
     result = 0;
     for (i = 0; i < num_cores; i++) {
-        if (results[i].is_div) {
-            result += results[i].result;
-        }
-    }
-    printf("Total MDivs: %ld\n", result / 1000000 / 5);
-
-    result = 0;
-    for (i = 0; i < num_cores; i++) {
-        if (!results[i].is_div) {
+        if (!results[i].is_add) {
             result += results[i].result;
         }
     }
     printf("Total MMuls: %ld\n", result / 1000000 / 5);
+
+    result = 0;
+    for (i = 0; i < num_cores; i++) {
+        if (results[i].is_add) {
+            result += results[i].result;
+        }
+    }
+    printf("Total MAdds: %ld\n", result / 1000000 / 5);
 
     return 0;
 }
