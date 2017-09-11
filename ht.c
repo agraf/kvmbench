@@ -10,7 +10,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <math.h>
-#include <immintrin.h>
 
 volatile uint32_t running = 0;
 int opt_pinned = 1;
