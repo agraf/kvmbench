@@ -62,7 +62,7 @@ static __inline__ unsigned long long rdtsc(void)
     return ( (unsigned long long)lo)|( ((unsigned long long)hi)<<32 );
 #elif defined(__aarch64__)
     unsigned long long ret;
-    asm volatile ("isb; mrs %0, cntvct_el0" : "=r" (ret));
+    asm volatile ("mrs %0, cntvct_el0" : "=r" (ret));
     return ret;
 #else
 #error Unsupported architecture
