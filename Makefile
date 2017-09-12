@@ -1,6 +1,11 @@
 CC=gcc
 CFLAGS=-Wall -O3
 TARGETS=invtsc l3cache numa ht
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_M),x86_64)
+    TARGETS += cpuid
+    CFLAGS += -mavx -mavx2 -std=gnu99
+endif
 
 all: $(TARGETS)
 
@@ -18,6 +23,9 @@ numa: numa.o
 
 ht: ht.o
 	$(CC) -o ht ht.o -lpthread
+
+cpuid: cpuid.o tsc.o tsc.h
+	$(CC) -o cpuid -mavx2 -mavx cpuid.o tsc.o
 
 clean:
 	rm -f *.o $(TARGETS)

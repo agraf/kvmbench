@@ -1,8 +1,3 @@
-#include <assert.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <sys/time.h>
-#include <unistd.h>
 #include "tsc.h"
 
 uint64_t tsc_per_sec;

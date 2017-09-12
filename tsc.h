@@ -1,3 +1,9 @@
+#include <assert.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <sys/time.h>
+#include <unistd.h>
+
 void setup_tsc(void);
 extern uint64_t tsc_per_sec;
 
