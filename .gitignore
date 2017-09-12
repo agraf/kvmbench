@@ -1,0 +1,7 @@
+*.o
+invtsc
+l3cache
+numa
+ht
+cpuid
+perf.data*
