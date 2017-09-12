@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <sys/time.h>
 #include <unistd.h>
-
+#include "tsc.h"
 
 static void benchmark_gettimeofday_fast(void)
 {
@@ -53,39 +53,6 @@ static void benchmark_gettimeofday(void)
 }
 
 //////////
-
-static __inline__ unsigned long long rdtsc(void)
-{
-#ifdef __x86_64__
-    unsigned hi, lo;
-    __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
-    return ( (unsigned long long)lo)|( ((unsigned long long)hi)<<32 );
-#elif defined(__aarch64__)
-    unsigned long long ret;
-    asm volatile ("mrs %0, cntvct_el0" : "=r" (ret));
-    return ret;
-#else
-#error Unsupported architecture
-#endif
-}
-
-static uint64_t tsc_per_sec;
-
-static void setup_tsc(void)
-{
-    uint64_t before, after;
-    uint64_t before_tod, after_tod;
-
-    before_tod = get_us_gettimeofday();
-    before = rdtsc();
-
-    usleep(10);
-
-    after_tod = get_us_gettimeofday();
-    after = rdtsc();
-
-    tsc_per_sec = ((after - before) * 1000000ULL) / (after_tod - before_tod);
-}
 
 static void benchmark_tsc(void)
 {

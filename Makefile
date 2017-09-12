@@ -7,8 +7,8 @@ all: $(TARGETS)
 %.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-invtsc: invtsc.o
-	$(CC) -o invtsc invtsc.o
+invtsc: invtsc.o tsc.o tsc.h
+	$(CC) -o invtsc invtsc.o tsc.o
 
 l3cache: l3cache.o
 	$(CC) -o l3cache l3cache.o -lpthread
