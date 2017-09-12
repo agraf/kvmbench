@@ -4,10 +4,12 @@ TARGETS=invtsc l3cache numa ht
 UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_M),x86_64)
     TARGETS += cpuid
-    CFLAGS += -mavx -mavx2 -std=gnu99
 endif
 
 all: $(TARGETS)
+
+cpuid_csum_avx2.o: cpuid_csum.c
+	$(CC) -c -o $@ $< $(CFLAGS) -mavx -mavx2 -std=gnu99
 
 %.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS)
@@ -24,8 +26,8 @@ numa: numa.o
 ht: ht.o
 	$(CC) -o ht ht.o -lpthread
 
-cpuid: cpuid.o tsc.o tsc.h
-	$(CC) -o cpuid -mavx2 -mavx cpuid.o tsc.o
+cpuid: cpuid.o cpuid_csum.o cpuid_csum_avx2.o tsc.o tsc.h
+	$(CC) -o cpuid cpuid.o cpuid_csum.o cpuid_csum_avx2.o tsc.o
 
 clean:
 	rm -f *.o $(TARGETS)
