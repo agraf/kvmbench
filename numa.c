@@ -1,3 +1,11 @@
+/*
+ *  NUMA message passing benchmark
+ *
+ *  Copyright (c) 2017 Alexander Graf
+ *
+ *  SPDX-License-Identifier:     GPL-2.0+
+ */
+
 #define _GNU_SOURCE
 #include <assert.h>
 #include <stdio.h>

@@ -1,3 +1,11 @@
+/*
+ *  TSC helper functions
+ *
+ *  Copyright (c) 2017 Alexander Graf
+ *
+ *  SPDX-License-Identifier:     GPL-2.0+
+ */
+
 #include "tsc.h"
 
 uint64_t tsc_per_sec;

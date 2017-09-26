@@ -1,3 +1,11 @@
+/*
+ *  Checksum benchmark
+ *
+ *  Copyright (c) 2017 Alexander Graf
+ *
+ *  SPDX-License-Identifier:     GPL-2.0+
+ */
+
 #include "tsc.h"
 #include <immintrin.h>
 #include <string.h>

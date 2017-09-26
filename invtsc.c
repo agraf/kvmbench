@@ -1,3 +1,11 @@
+/*
+ *  TSC vs gettimeofday benchmark
+ *
+ *  Copyright (c) 2017 Alexander Graf
+ *
+ *  SPDX-License-Identifier:     GPL-2.0+
+ */
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>

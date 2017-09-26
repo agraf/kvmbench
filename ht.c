@@ -1,3 +1,11 @@
+/*
+ *  Threading benchmark
+ *
+ *  Copyright (c) 2017 Alexander Graf
+ *
+ *  SPDX-License-Identifier:     GPL-2.0+
+ */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <pthread.h>

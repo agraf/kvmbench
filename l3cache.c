@@ -1,3 +1,11 @@
+/*
+ *  L3 cache effect benchmark for message passing
+ *
+ *  Copyright (c) 2017 Alexander Graf
+ *
+ *  SPDX-License-Identifier:     GPL-2.0+
+ */
+
 #define _GNU_SOURCE
 #include <assert.h>
 #include <stdio.h>
